@@ -1,9 +1,29 @@
-<img src="https://img.shields.io/github/stars/is0n/jaq-nvim.svg?style=for-the-badge&label=stars" align="left"/>
-<img src="https://img.shields.io/github/license/is0n/jaq-nvim?style=for-the-badge&logo=GNU" align="right"/>
+<img src="https://img.shields.io/github/stars/totochi-2022/jaq-nvim.svg?style=for-the-badge&label=stars" align="left"/>
+<img src="https://img.shields.io/github/license/totochi-2022/jaq-nvim?style=for-the-badge&logo=GNU" align="right"/>
 
-<h1 align='center'>jaq-nvim</h1>
+<h1 align='center'>jaq-nvim (Enhanced Fork)</h1>
 
 `jaq-nvim` is **J**ust **A**nother **Q**uickrun plugin for Neovim that was inspired by [quickrun.vim](https://github.com/D0n9X1n/quickrun.vim). In short, it is a plugin that lets you run the code of any language with a single command.
+
+## 🔥 Enhanced Features (Fork)
+
+This is an enhanced fork of [is0n/jaq-nvim](https://github.com/is0n/jaq-nvim) with additional process management capabilities:
+
+### Process Management
+- **Kill Current Process**: Stop the latest running jaq process without closing windows/buffers
+- **Kill All Processes**: Stop all jaq-managed processes at once
+- **Process List**: View all active jaq processes with runtime information
+- **Safe Termination**: Only kills jaq-managed processes, preserving other terminal sessions
+
+### New Commands
+- `:JaqKillCurrent` - Kill the most recent jaq process
+- `:JaqKillAll` - Kill all jaq processes 
+- `:JaqList` - List active jaq processes
+
+### Process Tracking
+- Tracks all running processes (float, terminal modes)
+- Shows process information (command, mode, runtime)
+- Preserves output windows for result viewing after termination
 
 ## Demo:
 
@@ -17,9 +37,14 @@
 
 ## Installation:
 
+#### [lazy.nvim](https://github.com/folke/lazy.nvim):
+  ```lua
+  { "totochi-2022/jaq-nvim" }
+  ```
+
 #### [packer.nvim](https://github.com/wbthomason/packer.nvim):
   ```lua
-  use {"is0n/jaq-nvim"}
+  use {"totochi-2022/jaq-nvim"}
   ```
 
 ## Example Lua Config:
