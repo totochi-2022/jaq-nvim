@@ -1,5 +1,9 @@
 local M = {}
 
+-- プロセス管理 (by totochi-2022)
+M.current_process = nil  -- 最新の実行プロセス
+M.all_processes = {}     -- 全プロセス履歴
+
 local config = {
   cmds = {
     internal = {},
@@ -98,7 +102,33 @@ local function float(cmd)
   vim.api.nvim_buf_set_option(M.buf, "filetype", "Jaq")
   vim.api.nvim_buf_set_keymap(M.buf, 'n', '<ESC>', '<cmd>:lua vim.api.nvim_win_close(' .. M.win .. ', true)<CR>', { silent = true })
 
-  vim.fn.termopen(cmd)
+  -- プロセス開始とプロセス管理 (by totochi-2022)
+  local job_id = vim.fn.termopen(cmd, {
+    on_exit = function(job_id, exit_code, event)
+      -- 終了時にプロセス記録をクリア
+      if M.current_process and M.current_process.job_id == job_id then
+        M.current_process = nil
+      end
+      if M.all_processes[M.buf] then
+        M.all_processes[M.buf] = nil
+      end
+    end
+  })
+  
+  -- プロセス情報を記録
+  if job_id > 0 then
+    local process_info = {
+      job_id = job_id,
+      buffer = M.buf,
+      window = M.win,
+      mode = "float",
+      source_file = vim.fn.expand('%:p'),
+      command = cmd,
+      timestamp = os.time()
+    }
+    M.current_process = process_info
+    M.all_processes[M.buf] = process_info
+  end
 
   vim.cmd("autocmd! VimResized * lua require('jaq-nvim').VimResized()")
 
@@ -118,6 +148,25 @@ local function term(cmd)
 
   vim.api.nvim_buf_set_option(M.buf, "filetype", "Jaq")
   vim.api.nvim_buf_set_keymap(M.buf, 'n', '<ESC>', '<cmd>:bdelete!<CR>', { silent = true })
+  
+  -- プロセス管理 (by totochi-2022)
+  -- terminalモードではjob_idを後から取得
+  vim.defer_fn(function()
+    local job_id = vim.api.nvim_buf_get_var(M.buf, 'terminal_job_id')
+    if job_id then
+      local process_info = {
+        job_id = job_id,
+        buffer = M.buf,
+        window = vim.api.nvim_get_current_win(),
+        mode = "terminal",
+        source_file = vim.fn.expand('%:p'),
+        command = cmd,
+        timestamp = os.time()
+      }
+      M.current_process = process_info
+      M.all_processes[M.buf] = process_info
+    end
+  end, 100)  -- 100ms後にjob_idを取得
 
   if config.behavior.startinsert then
     vim.cmd("startinsert")
@@ -257,6 +306,92 @@ function M.Jaq(type)
   end
 
   run(type)
+end
+
+-- プロセス管理関数 (by totochi-2022)
+-- 最新プロセスのみkill
+function M.kill_current()
+  if M.current_process then
+    local process = M.current_process
+    
+    -- ジョブを停止
+    if process.job_id then
+      pcall(vim.fn.jobstop, process.job_id)
+    end
+    
+    -- プロセスのみ停止（ウィンドウ/バッファは残す）
+    -- 結果を確認できるようにバッファは削除しない
+    -- if process.buffer and vim.api.nvim_buf_is_valid(process.buffer) then
+    --   pcall(vim.api.nvim_buf_delete, process.buffer, { force = true })
+    -- end
+    
+    -- プロセス記録をクリア
+    M.current_process = nil
+    if M.all_processes[process.buffer] then
+      M.all_processes[process.buffer] = nil
+    end
+    
+    print(string.format("Killed process: %s (job_id: %d)", process.command or "unknown", process.job_id or 0))
+    return true
+  else
+    print("No current jaq process found")
+    return false
+  end
+end
+
+-- 全jaqプロセスをkill
+function M.kill_all()
+  local count = 0
+  
+  for buf_id, process in pairs(M.all_processes) do
+    if vim.api.nvim_buf_is_valid(buf_id) then
+      -- ジョブを停止
+      if process.job_id then
+        pcall(vim.fn.jobstop, process.job_id)
+      end
+      
+      -- プロセスのみ停止（バッファは残す）
+      -- pcall(vim.api.nvim_buf_delete, buf_id, { force = true })
+      count = count + 1
+    end
+  end
+  
+  -- 全記録をクリア
+  M.current_process = nil
+  M.all_processes = {}
+  
+  if count > 0 then
+    print(string.format("Killed %d jaq process(es)", count))
+  else
+    print("No jaq processes found")
+  end
+  
+  return count
+end
+
+-- アクティブプロセス一覧表示
+function M.list_processes()
+  local count = 0
+  print("Active jaq processes:")
+  
+  for buf_id, process in pairs(M.all_processes) do
+    if vim.api.nvim_buf_is_valid(buf_id) then
+      local elapsed = os.time() - process.timestamp
+      local current_mark = (M.current_process and M.current_process.job_id == process.job_id) and " [CURRENT]" or ""
+      print(string.format("  %s (%s, %ds ago)%s", 
+        process.command or "unknown", process.mode or "unknown", elapsed, current_mark))
+      count = count + 1
+    else
+      -- 無効なバッファは記録から削除
+      M.all_processes[buf_id] = nil
+    end
+  end
+  
+  if count == 0 then
+    print("  No active processes")
+  end
+  
+  return count
 end
 
 return M
